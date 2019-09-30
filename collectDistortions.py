@@ -64,8 +64,8 @@ def collate_different_seeds(target_files: typing.Union[set, list], args: dict) -
             # print(x_values)
             if len(x_values) > max_length:
                 max_length = len(x_values)
-                x_all_seeds.append(x_values)
-                y_all_seeds.append(y_values)
+            x_all_seeds.append(x_values)
+            y_all_seeds.append(y_values)
 
         # Normalize by repeating last element
         for i in range(len(x_all_seeds)):
@@ -81,10 +81,10 @@ def collate_different_seeds(target_files: typing.Union[set, list], args: dict) -
                 y_all_seeds[i] = np.vstack((y_values, new))
 
         # Calculate the grand mean and variance for all of [y_all_seeds]
-        combined = np.empty((max_length, 3 * 3 * 3 * 2), dtype=float)
+        combined = np.empty((max_length, 3 * 3 * 3 * 2), dtype='float')
         for step in range(max_length):
             offset = 0
-            for utility in ['b', 'P', 'v']:
+            for utility in ['b', 'p', 'v']:
                 for n in [7, 8, 9]:
                     for fixation in ['F', 'H', 'A']:
                         tn = tx = txx = 0
@@ -101,17 +101,30 @@ def collate_different_seeds(target_files: typing.Union[set, list], args: dict) -
                         # combined_n = tn  # combined n
                         combined[step, offset] = tx / tn  # Combined mean
                         combined[step, offset + 1] = (txx - tx ** 2 / tn) / (tn - 1)  # Combined Variance
-                    offset += 2
+                        offset += 2
 
         x_all_targets[target] = list(range(0, max_length * 10, 10))
         y_all_targets[target] = combined
 
         # print the combined mean and variance to a file for persistence
-        print_aggregated_array(combined, target, args)
+        print_aggregated_array(combined, Path(out_folder, f'distortion-{target}-allseeds.csv'), args)
 
         # draw nine graphs to a single graphs
         show = args['--show']
-        create_graph(x_all_targets[target], y_all_targets[target], Path(out_folder, 'distortion-'+target+'.png'), show)
+        try:
+            create_graph(x_all_targets[target], y_all_targets[target], Path(out_folder, f'distortion-{target}.png'),
+                         show)
+        except BaseException as baseException:
+            log = args['log']
+            log.write(f'Error in {target}\n')
+            log.write(str(baseException))
+            inf = sys.exc_info()
+            log.write(str(inf[0]))
+            log.write(',\t')
+            log.write(str(inf[1]))
+            log.write('\n')
+            log.write(inf[2])
+            log.write('\n------------------------------------------------------\n')
 
     return x_all_targets, y_all_targets
 
@@ -126,29 +139,40 @@ def create_graph(x: list, ys: np.ndarray, out_file: Path, show: bool = False):
     plt.figure()
     # plt.subplot(3, 3, 1)
 
-    for util in enumerate(['b', 'P', 'v']):
+    ax1: plt.axes.Axes = None
+    ax: plt.axes.Axes = None
+    for util in enumerate(['b', 'p', 'v']):
         for n in enumerate([7, 8, 9]):
             offset = (util[0] * 3 + n[0] * 1) * 6
             subplot_index = (util[0] * 1 + n[0] * 3) + 1
 
-            plt.subplot(3, 3, subplot_index)
+            if subplot_index == 1:
+                ax = ax1 = plt.subplot(3, 3, subplot_index)
+            else:
+                ax = plt.subplot(3, 3, subplot_index, sharex=ax1, sharey=ax1)
 
             # for fix in enumerate(['F', 'H', 'A']):
 
             yf = ys[:, offset + 0]
             vf = ys[:, offset + 1]
             if not all(np.isnan(yf)):
-                plt.plot(x, yf, '-', label=f'FF', )
+                ax.plot(x, yf, '-', label=f'FF', color='C0')
 
             yf = ys[:, offset + 2]
             vf = ys[:, offset + 3]
             if not all(np.isnan(yf)):
-                plt.plot(x, yf, '-', label=f'HF')
+                ax.plot(x, yf, '-', label=f'HF', color='C1')
 
             yf = ys[:, offset + 4]
             vf = ys[:, offset + 5]
             if not all(np.isnan(yf)):
-                plt.plot(x, yf, '-', label=f'AF')
+                ax.plot(x, yf, '-', label=f'AF', color='C2')
+
+            ax.legend()
+            if util[0] == 0:
+                ax.set_ylabel(f'n={n[1]}')
+            if n[0] == 2:
+                ax.set_xlabel(f'Util={util[1]}')
 
     plt.savefig(out_file)
     if show:
@@ -182,6 +206,7 @@ def main():
             if dirname != '':
                 os.makedirs(dirname, exist_ok=True)
         log = open(log_arg, 'w')
+    args['log'] = log
 
     in_folder_arg = args['--in-folder']
     in_folder = Path(in_folder_arg)
