@@ -136,7 +136,7 @@ def collate_different_seeds(target_files: typing.Union[set, list], args: dict) -
 
 
 def create_graph(x: list, ys: np.ndarray, out_file: Path, show: bool = False):
-    plt.figure()
+    plt.figure(figsize=(12.8, 9.6), dpi=200)
     # plt.subplot(3, 3, 1)
 
     ax1: plt.axes.Axes = None
@@ -150,6 +150,8 @@ def create_graph(x: list, ys: np.ndarray, out_file: Path, show: bool = False):
                 ax = ax1 = plt.subplot(3, 3, subplot_index)
             else:
                 ax = plt.subplot(3, 3, subplot_index, sharex=ax1, sharey=ax1)
+            ax.set_yscale('log', basey=2)
+            ax.set_xscale('log', basex=10, subsx=[2, 3, 4, 5, 6, 7, 8, 9])
 
             # for fix in enumerate(['F', 'H', 'A']):
 
@@ -169,6 +171,7 @@ def create_graph(x: list, ys: np.ndarray, out_file: Path, show: bool = False):
                 ax.plot(x, yf, '-', label=f'AF', color='C2')
 
             ax.legend()
+            ax.grid(True)
             if util[0] == 0:
                 ax.set_ylabel(f'n={n[1]}')
             if n[0] == 2:
