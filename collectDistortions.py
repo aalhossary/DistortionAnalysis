@@ -10,19 +10,19 @@ from docopt import docopt
 
 def print_aggregated_array(combined: np.ndarray, out_file: Path, args: dict):
     with open(out_file, mode='w') as out:
-        out.write('step\t')
-        for utility in ['b', 'P', 'v']:
-            for c in [7, 8, 9]:
-                for fixation in ['FF', 'HF', 'AF']:
+        out.write('Step\t')
+        for utility in ['XB', 'P', 'V']:
+            for c in [3, 6]:
+                for fixation in ['100%', '50%', '0%']:
                     for value in ['M', 'V']:
-                        out.write(f'U{utility}C{c}{fixation}{value}\t')
+                        out.write(f'U{utility}_C{c}_{fixation}_{value}\t')
         out.write('\n')
         for step in range(combined.shape[0]):
             out.write(f'{step * 10}\t')
             offset = 0
-            for utility in ['b', 'P', 'v']:
-                for c in [7, 8, 9]:
-                    for fixation in ['FF', 'HF', 'AF']:
+            for utility in ['XB', 'P', 'V']:
+                for c in [3, 6]:
+                    for fixation in ['100%', '50%', '0%']:
                         for value in ['M', 'V']:
                             out.write(f'{combined[step, offset]:.6E}\t')
                             offset += 1
@@ -81,12 +81,12 @@ def collate_different_seeds(target_files: typing.Union[set, list], args: dict) -
                 y_all_seeds[i] = np.vstack((y_values, new))
 
         # Calculate the grand mean and variance for all of [y_all_seeds]
-        combined = np.empty((max_length, 3 * 3 * 3 * 2), dtype='float')
+        combined = np.empty((max_length, 3 * 2 * 3 * 2), dtype='float')
         for step in range(max_length):
             offset = 0
-            for utility in ['b', 'p', 'v']:
-                for n in [7, 8, 9]:
-                    for fixation in ['F', 'H', 'A']:
+            for utility in ['XB', 'P', 'V']:
+                for n in [3, 6]:
+                    for fixation in ['100%', '50%', '0%']:
                         tn = tx = txx = 0
                         # aggregate these
                         for seed_file in y_all_seeds:
@@ -141,40 +141,40 @@ def create_graph(x: list, ys: np.ndarray, out_file: Path, show: bool = False):
 
     ax1: plt.axes.Axes = None
     ax: plt.axes.Axes = None
-    for util in enumerate(['b', 'p', 'v']):
-        for n in enumerate([7, 8, 9]):
-            offset = (util[0] * 3 + n[0] * 1) * 6
-            subplot_index = (util[0] * 1 + n[0] * 3) + 1
+    for util in enumerate(['XB', 'P', 'V']):
+        for n in enumerate([3, 6]):
+            offset = (util[0] * 2 + n[0] * 1) * 6  # 6 = 3*2
+            subplot_index = (n[0] * 3 + util[0] * 1) + 1
 
             if subplot_index == 1:
-                ax = ax1 = plt.subplot(3, 3, subplot_index)
+                ax = ax1 = plt.subplot(2, 3, subplot_index)
             else:
-                ax = plt.subplot(3, 3, subplot_index, sharex=ax1, sharey=ax1)
+                ax = plt.subplot(2, 3, subplot_index, sharex=ax1, sharey=ax1)
             ax.set_yscale('log', basey=2)
             ax.set_xscale('log', basex=10, subsx=[2, 3, 4, 5, 6, 7, 8, 9])
 
-            # for fix in enumerate(['F', 'H', 'A']):
+            # for fix in enumerate(['100%F', '50%F', '0%F']):
 
             yf = ys[:, offset + 0]
             vf = ys[:, offset + 1]
             if not all(np.isnan(yf)):
-                ax.plot(x, yf, '-', label=f'FF', color='C0')
+                ax.plot(x, yf, '-', label=f'100%F', color='C0')
 
             yf = ys[:, offset + 2]
             vf = ys[:, offset + 3]
             if not all(np.isnan(yf)):
-                ax.plot(x, yf, '-', label=f'HF', color='C1')
+                ax.plot(x, yf, '-', label=f'50%F', color='C1')
 
             yf = ys[:, offset + 4]
             vf = ys[:, offset + 5]
             if not all(np.isnan(yf)):
-                ax.plot(x, yf, '-', label=f'AF', color='C2')
+                ax.plot(x, yf, '-', label=f'0%F', color='C2')
 
             ax.legend()
             ax.grid(True)
             if util[0] == 0:
                 ax.set_ylabel(f'n={n[1]}')
-            if n[0] == 2:
+            if n[0] == 1:
                 ax.set_xlabel(f'Util={util[1]}')
 
     plt.savefig(out_file)
