@@ -52,13 +52,13 @@ def collate_different_seeds(target_files: typing.Union[set, list], args: dict) -
         y_all_seeds = []
         files_from_all_seeds = [f for f in in_folder.iterdir() if f.name.startswith(target, 14)]
         for f in files_from_all_seeds:
-            input_file = Path(in_folder, f)
+            # input_file = Path(in_folder, f)
             # if input_file.name.index("53961") > 0:
             #     print("\n\n\n\n\n\n\n\n\n\n\n")
-            if os.path.getsize(input_file) == 0:
+            if os.path.getsize(f) == 0:  # can never not exist. I got the name from the file system already
                 # print(f'============={f} EMPTY=================')
                 continue
-            temp_arr = np.loadtxt(input_file, skiprows=1)
+            temp_arr = np.loadtxt(f, skiprows=1)
             x_values, y_values = temp_arr[:, 0], temp_arr[:, 1:]
             x_values = x_values.astype(int)
             # print(x_values)
@@ -123,7 +123,7 @@ def collate_different_seeds(target_files: typing.Union[set, list], args: dict) -
             log.write(',\t')
             log.write(str(inf[1]))
             log.write('\n')
-            log.write(inf[2])
+            log.write(str(inf[2]))
             log.write('\n------------------------------------------------------\n')
 
     return x_all_targets, y_all_targets
@@ -221,8 +221,8 @@ def main():
         target_files = [l.rstrip() for l in lines]
         # print(target_files)
     else:
-        target_files = {x.name[14: x.name.rfind(',seed', -17)] for x in in_folder.iterdir()
-                        if x.name.startswith(('ICAP', 'FCONCAP'), 20)
+        target_files = {x.name[14: x.name.rfind(',seed')] for x in in_folder.iterdir()
+                        if x.name.startswith(('ICaP', 'FCoNCaP'), 20)
                         }
 
     out_folder = args['--out-folder']
