@@ -4,6 +4,7 @@ import sys
 import typing
 from pathlib import Path
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 import numpy as np
 from docopt import docopt
 
@@ -136,10 +137,11 @@ def collate_different_seeds(target_files: typing.Union[set, list], args: dict) -
 
 
 def create_graph(x: list, ys: np.ndarray, out_file: Path, show: bool = False):
-    plt.figure(figsize=(12.8, 9.6), dpi=200)
+    figure: Figure = plt.figure(figsize=(12.8, 9.6), dpi=200)
     # plt.subplot(3, 3, 1)
 
     ax1: plt.axes.Axes = None
+    ax3: plt.axes.Axes = None
     ax: plt.axes.Axes = None
     for util in enumerate(['XB', 'P', 'V']):
         for n in enumerate([3, 6]):
@@ -147,9 +149,14 @@ def create_graph(x: list, ys: np.ndarray, out_file: Path, show: bool = False):
             subplot_index = (n[0] * 3 + util[0] * 1) + 1
 
             if subplot_index == 1:
-                ax = ax1 = plt.subplot(2, 3, subplot_index)
+                ax1 = ax = plt.subplot(2, 3, subplot_index)
+            elif subplot_index == 3:
+                ax3 = ax = plt.subplot(2, 3, subplot_index)
             else:
-                ax = plt.subplot(2, 3, subplot_index, sharex=ax1, sharey=ax1)
+                if util[0] == 2:
+                    ax = plt.subplot(2, 3, subplot_index, sharex=ax1, sharey=ax3)
+                else:
+                    ax = plt.subplot(2, 3, subplot_index, sharex=ax1, sharey=ax1)
             ax.set_yscale('log', basey=2)
             ax.set_xscale('log', basex=10, subsx=[2, 3, 4, 5, 6, 7, 8, 9])
 
@@ -180,6 +187,7 @@ def create_graph(x: list, ys: np.ndarray, out_file: Path, show: bool = False):
     plt.savefig(out_file)
     if show:
         plt.show()
+    plt.close(figure)
 
 
 def main():
@@ -214,7 +222,7 @@ def main():
     in_folder_arg = args['--in-folder']
     in_folder = Path(in_folder_arg)
     if not in_folder.is_dir():
-        raise RuntimeError('in-folder is does not exist or is not a folder')
+        raise RuntimeError('in-folder is does not exist or is not a folder: %s' % in_folder)
 
     if args['--list']:
         lines = open(args['--list']).readlines()
@@ -222,7 +230,7 @@ def main():
         # print(target_files)
     else:
         target_files = {x.name[14: x.name.rfind(',seed')] for x in in_folder.iterdir()
-                        if x.name.startswith(('ICaP', 'FCoNCaP'), 20)
+                        if x.name.startswith(('ICaP', 'FCoNCaP'), 20) and x.name.endswith('.csv')
                         }
 
     out_folder = args['--out-folder']
