@@ -8,22 +8,25 @@ from matplotlib.figure import Figure
 import numpy as np
 from docopt import docopt
 
+utility_names = ['XB', 'P', 'V']
+num_candidates = [3, 6]
+fixations = ['100%', '50%', '0%']
 
 def print_aggregated_array(combined: np.ndarray, out_file: Path, args: dict):
     with open(out_file, mode='w') as out:
         out.write('Step\t')
-        for utility in ['XB', 'P', 'V']:
-            for c in [3, 6]:
-                for fixation in ['100%', '50%', '0%']:
+        for utility in utility_names:
+            for c in num_candidates:
+                for fixation in fixations:
                     for value in ['M', 'V']:
                         out.write(f'U{utility}_C{c}_{fixation}_{value}\t')
         out.write('\n')
         for step in range(combined.shape[0]):
             out.write(f'{step * 10}\t')
             offset = 0
-            for utility in ['XB', 'P', 'V']:
-                for c in [3, 6]:
-                    for fixation in ['100%', '50%', '0%']:
+            for utility in utility_names:
+                for c in num_candidates:
+                    for fixation in fixations:
                         for value in ['M', 'V']:
                             out.write(f'{combined[step, offset]:.6E}\t')
                             offset += 1
@@ -85,9 +88,9 @@ def collate_different_seeds(target_files: typing.Union[set, list], args: dict) -
         combined = np.empty((max_length, 3 * 2 * 3 * 2), dtype='float')
         for step in range(max_length):
             offset = 0
-            for utility in ['XB', 'P', 'V']:
-                for n in [3, 6]:
-                    for fixation in ['100%', '50%', '0%']:
+            for utility in utility_names:
+                for n in num_candidates:
+                    for fixation in fixations:
                         tn = tx = txx = 0
                         # aggregate these
                         for seed_file in y_all_seeds:
@@ -143,8 +146,8 @@ def create_graph(x: list, ys: np.ndarray, out_file: Path, show: bool = False):
     ax1: plt.axes.Axes = None
     ax3: plt.axes.Axes = None
     ax: plt.axes.Axes = None
-    for util in enumerate(['XB', 'P', 'V']):
-        for n in enumerate([3, 6]):
+    for util in enumerate(utility_names):
+        for n in enumerate(num_candidates):
             offset = (util[0] * 2 + n[0] * 1) * 6  # 6 = 3*2
             subplot_index = (n[0] * 3 + util[0] * 1) + 1
 
