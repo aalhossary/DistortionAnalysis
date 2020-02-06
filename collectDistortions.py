@@ -8,9 +8,16 @@ from matplotlib.figure import Figure
 import numpy as np
 from docopt import docopt
 
-utility_names = ['XB', 'P', 'V']
+utility_names = ['XB', 'LB', 'P', 'V']
 num_candidates = [3, 6]
 fixations = ['100%', '50%', '0%']
+group = ['M', 'V']
+
+len_util = len(utility_names)
+len_fixations = len(fixations)
+len_num_candidates = len(num_candidates)
+group_size = len(group)
+
 
 def print_aggregated_array(combined: np.ndarray, out_file: Path, args: dict):
     with open(out_file, mode='w') as out:
@@ -18,7 +25,7 @@ def print_aggregated_array(combined: np.ndarray, out_file: Path, args: dict):
         for utility in utility_names:
             for c in num_candidates:
                 for fixation in fixations:
-                    for value in ['M', 'V']:
+                    for value in group:
                         out.write(f'U{utility}_C{c}_{fixation}_{value}\t')
         out.write('\n')
         for step in range(combined.shape[0]):
@@ -27,7 +34,7 @@ def print_aggregated_array(combined: np.ndarray, out_file: Path, args: dict):
             for utility in utility_names:
                 for c in num_candidates:
                     for fixation in fixations:
-                        for value in ['M', 'V']:
+                        for value in group:
                             out.write(f'{combined[step, offset]:.6E}\t')
                             offset += 1
             out.write('\n')
@@ -85,7 +92,7 @@ def collate_different_seeds(target_files: typing.Union[set, list], args: dict) -
                 y_all_seeds[i] = np.vstack((y_values, new))
 
         # Calculate the grand mean and variance for all of [y_all_seeds]
-        combined = np.empty((max_length, 3 * 2 * 3 * 2), dtype='float')
+        combined = np.empty((max_length, len_util * len_num_candidates * len_fixations * group_size), dtype='float')
         for step in range(max_length):
             offset = 0
             for utility in utility_names:
@@ -140,26 +147,28 @@ def collate_different_seeds(target_files: typing.Union[set, list], args: dict) -
 
 
 def create_graph(x: list, ys: np.ndarray, out_file: Path, show: bool = False):
-    figure: Figure = plt.figure(figsize=(12.8, 9.6), dpi=200)
+    figure: Figure = plt.figure(figsize=(20, 10), dpi=200)
     # plt.subplot(3, 3, 1)
 
-    ax1: plt.axes.Axes = None
-    ax3: plt.axes.Axes = None
-    ax: plt.axes.Axes = None
-    for util in enumerate(utility_names):
-        for n in enumerate(num_candidates):
-            offset = (util[0] * 2 + n[0] * 1) * 6  # 6 = 3*2
-            subplot_index = (n[0] * 3 + util[0] * 1) + 1
+    offsets_in_subplot = len_fixations * group_size
 
-            if subplot_index == 1:
-                ax1 = ax = plt.subplot(2, 3, subplot_index)
-            elif subplot_index == 3:
-                ax3 = ax = plt.subplot(2, 3, subplot_index)
+    ax1: plt.axes.Axes = None
+    ax4: plt.axes.Axes = None
+    ax: plt.axes.Axes = None
+    for util_id, util_name in enumerate(utility_names):
+        for num_candidates_id, num_candidates_value in enumerate(num_candidates):
+            offset = (util_id * len_num_candidates + num_candidates_id) * offsets_in_subplot
+            subplot_index = (num_candidates_id * len_util + util_id) + 1
+
+            if subplot_index == 1:  # 1st subplot in 1st row
+                ax1 = ax = plt.subplot(len_num_candidates, len_util, subplot_index)
+            elif subplot_index == len_util:  # last subplot in first row
+                ax4 = ax = plt.subplot(len_num_candidates, len_util, subplot_index)
             else:
-                if util[0] == 2:
-                    ax = plt.subplot(2, 3, subplot_index, sharex=ax1, sharey=ax3)
+                if util_id == len_util - 1:  # any subsequent subplot in last column
+                    ax = plt.subplot(len_num_candidates, len_util, subplot_index, sharex=ax1, sharey=ax4)
                 else:
-                    ax = plt.subplot(2, 3, subplot_index, sharex=ax1, sharey=ax1)
+                    ax = plt.subplot(len_num_candidates, len_util, subplot_index, sharex=ax1, sharey=ax1)
             ax.set_yscale('log', basey=2)
             ax.set_xscale('log', basex=10, subsx=[2, 3, 4, 5, 6, 7, 8, 9])
 
@@ -182,10 +191,10 @@ def create_graph(x: list, ys: np.ndarray, out_file: Path, show: bool = False):
 
             ax.legend()
             ax.grid(True)
-            if util[0] == 0:
-                ax.set_ylabel(f'n={n[1]}')
-            if n[0] == 1:
-                ax.set_xlabel(f'Util={util[1]}')
+            if util_id == 0:
+                ax.set_ylabel(f'n={num_candidates_value}')
+            if num_candidates_id == 1:
+                ax.set_xlabel(f'Util={util_name}')
 
     plt.savefig(out_file)
     if show:
