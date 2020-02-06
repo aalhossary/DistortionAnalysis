@@ -169,7 +169,7 @@ def create_graph(x: list, ys: np.ndarray, out_file: Path, show: bool = False):
                     ax = plt.subplot(len_num_candidates, len_util, subplot_index, sharex=ax1, sharey=ax4)
                 else:
                     ax = plt.subplot(len_num_candidates, len_util, subplot_index, sharex=ax1, sharey=ax1)
-            ax.set_yscale('log', basey=2)
+            # ax.set_yscale('log', basey=2)
             ax.set_xscale('log', basex=10, subsx=[2, 3, 4, 5, 6, 7, 8, 9])
 
             # for fix in enumerate(['100%F', '50%F', '0%F']):
@@ -178,22 +178,31 @@ def create_graph(x: list, ys: np.ndarray, out_file: Path, show: bool = False):
             vf = ys[:, offset + 1]
             if not all(np.isnan(yf)):
                 ax.plot(x, yf, '-', label=f'100%F', color='C0')
+                y1 = yf + vf
+                y2 = yf - vf
+                ax.fill_between(x, y1, y2, alpha=0.2, color='C0')
 
             yf = ys[:, offset + 2]
             vf = ys[:, offset + 3]
             if not all(np.isnan(yf)):
                 ax.plot(x, yf, '-', label=f'50%F', color='C1')
+                y1 = yf + vf
+                y2 = yf - vf
+                ax.fill_between(x, y1, y2, alpha=0.2, color='C1')
 
             yf = ys[:, offset + 4]
             vf = ys[:, offset + 5]
             if not all(np.isnan(yf)):
                 ax.plot(x, yf, '-', label=f'0%F', color='C2')
+                y1 = yf + vf
+                y2 = yf - vf
+                ax.fill_between(x, y1, y2, alpha=0.2, color='C2')
 
             ax.legend()
             ax.grid(True)
             if util_id == 0:
                 ax.set_ylabel(f'n={num_candidates_value}')
-            if num_candidates_id == 1:
+            if num_candidates_id == len_num_candidates - 1:
                 ax.set_xlabel(f'Util={util_name}')
 
     plt.savefig(out_file)
