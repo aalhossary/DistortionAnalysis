@@ -45,7 +45,7 @@ def collate_different_seeds(target_files: typing.Union[set, list], args: dict) -
     Aggregate different seeds of the same parameter set.
     The formula to aggregate variances from different subgroups is taken
     from https://www.statstodo.com/CombineMeansSDs_Pgm.php
-    :param target_files:
+    :param target_files: set / list of combinations of all parameters (excluding the seed)
     :type target_files:
     :param args:
     :type args:
@@ -54,13 +54,16 @@ def collate_different_seeds(target_files: typing.Union[set, list], args: dict) -
     """
     in_folder: Path = args['in_folder']
     out_folder: Path = args['out_folder']
+    delta_folder: Path = args['delta_folder']
     x_all_targets = dict()
     y_all_targets = dict()
+    delta_all_targets = dict()
     for target in iter(target_files):
         print(target)
         max_length = 0
         x_all_seeds = []
         y_all_seeds = []
+        delta_all_seeds = [] if delta_folder else None
         files_from_all_seeds = [f for f in in_folder.iterdir() if f.name.startswith(target, 14)]
         for f in files_from_all_seeds:
             # input_file = Path(in_folder, f)
@@ -69,14 +72,24 @@ def collate_different_seeds(target_files: typing.Union[set, list], args: dict) -
             if os.path.getsize(f) == 0:  # can never not exist. I got the name from the file system already
                 # print(f'============={f} EMPTY=================')
                 continue
+
+            # TODO add delta code here
             temp_arr = np.loadtxt(f, skiprows=1)
-            x_values, y_values = temp_arr[:, 0], temp_arr[:, 1:]
+
+            if delta_folder is None:
+                x_values, y_values = temp_arr[:, 0], temp_arr[:, 1:]
+                delta_values = None
+            else:
+                x_values, delta_values, y_values = temp_arr[:, 0], temp_arr[:, 1], temp_arr[:, 2:]
+
             x_values = x_values.astype(int)
             # print(x_values)
             if len(x_values) > max_length:
                 max_length = len(x_values)
             x_all_seeds.append(x_values)
             y_all_seeds.append(y_values)
+            if delta_all_seeds is not None:
+                delta_all_seeds.append(delta_values)
 
         # Normalize by repeating last element
         for i in range(len(x_all_seeds)):
@@ -90,15 +103,24 @@ def collate_different_seeds(target_files: typing.Union[set, list], args: dict) -
                 last_element = y_values[ln - 1]
                 new = np.repeat([last_element], add, axis=0)
                 y_all_seeds[i] = np.vstack((y_values, new))
+                if delta_all_seeds is not None:
+                    delta_values = delta_all_seeds[i]
+                    last_element = delta_values[ln - 1]
+                    new = np.repeat(last_element, add, axis=0)
+                    delta_all_seeds[i] = np.concatenate((delta_values, new))
+
 
         # Calculate the grand mean and variance for all of [y_all_seeds]
-        combined = np.empty((max_length, len_util * len_num_candidates * len_fixations * group_size), dtype='float')
+        combined_yv = np.empty((max_length, len_util * len_num_candidates * len_fixations * group_size), dtype='float')
+        combined_delta = np.zeros((max_length, ), dtype=float)
+
         for step in range(max_length):
             offset = 0
             for utility in utility_names:
                 for n in num_candidates:
                     for fixation in fixations:
-                        tn = tx = txx = 0
+                        tn = tx = txx = 0.0
+                        sigma_delta = 0.0
                         # aggregate these
                         for seed_file in y_all_seeds:
                             m = seed_file[step, offset]
@@ -108,23 +130,28 @@ def collate_different_seeds(target_files: typing.Union[set, list], args: dict) -
                             tn += n
                             tx += sigma_x
                             txx += sigma_x2
+                        # delta_all_seeds
+                        for delta_file in delta_all_seeds:
+                            sigma_delta += delta_file[step]
 
                         # combined_n = tn  # combined n
-                        combined[step, offset] = tx / tn  # Combined mean
-                        combined[step, offset + 1] = (txx - tx ** 2 / tn) / (tn - 1)  # Combined Variance
+                        combined_yv[step, offset] = tx / tn  # Combined mean
+                        combined_yv[step, offset + 1] = (txx - tx ** 2 / tn) / (tn - 1)  # Combined Variance
                         offset += 2
+                        combined_delta[step] = sigma_delta / tn
 
         x_all_targets[target] = list(range(0, max_length * 10, 10))
-        y_all_targets[target] = combined
+        y_all_targets[target] = combined_yv
+        delta_all_targets[target] = combined_delta
 
         # print the combined mean and variance to a file for persistence
-        print_aggregated_array(combined, Path(out_folder, f'distortion-{target}-allseeds.csv'), args)
+        print_aggregated_array(combined_yv, Path(out_folder, f'distortion-{target}-allseeds.csv'), args)
 
         # draw nine graphs to a single graphs
         show = args['--show']
         try:
-            create_graph(x_all_targets[target], y_all_targets[target], Path(out_folder, f'distortion-{target}.png'),
-                         show)
+            create_graph(x_all_targets[target], y_all_targets[target], delta_all_targets[target],
+                         Path(out_folder, f'distortion-{target}.png'), show)
         except BaseException as baseException:
             log = args['log']
             log.write(f'Error in {target}\n')
@@ -146,7 +173,7 @@ def collate_different_seeds(target_files: typing.Union[set, list], args: dict) -
 #         create_graph(x_all_targets[target], y_all_targets[target], target, show)
 
 
-def create_graph(x: list, ys: np.ndarray, out_file: Path, show: bool = False):
+def create_graph(x: list, ys: np.ndarray, deltas: np.ndarray, out_file: Path, show: bool = False):
     figure: Figure = plt.figure(figsize=(20, 10), dpi=200)
     # plt.subplot(3, 3, 1)
 
@@ -198,6 +225,13 @@ def create_graph(x: list, ys: np.ndarray, out_file: Path, show: bool = False):
                 y2 = yf - vf
                 ax.fill_between(x, y1, y2, alpha=0.2, color='C2')
 
+            ax_delta = ax.twinx()  # instantiate a second axes that shares the same x-axis
+            color = 'tab:blue'
+            ax_delta.set_ylabel('sys delta', color=color)  # we already handled the x-label with ax1
+            ax_delta.plot(x, deltas, color=color)
+            ax_delta.tick_params(axis='y', labelcolor=color)
+            ax_delta.set_yscale('log', basey=2)
+
             ax.legend()
             ax.grid(True)
             if util_id == 0:
@@ -205,6 +239,7 @@ def create_graph(x: list, ys: np.ndarray, out_file: Path, show: bool = False):
             if num_candidates_id == len_num_candidates - 1:
                 ax.set_xlabel(f'Util={util_name}')
 
+    figure.tight_layout()  # otherwise the right y-label is slightly clipped
     plt.savefig(out_file)
     if show:
         plt.show()
@@ -222,6 +257,7 @@ def main():
       -i, --in-folder=IFOLDER   input folder where all means/variances are.     [Default: ./]
       -o, --out-folder=OFOLDER  Output folder where all scenarios are written   [Default: ./out]
       -l, --log=LFILE           Log file (if omitted or -, output to stdout)    [Default: -]
+      -d, --delta=DELTA         System delta data (- | same)                    [Default: same]
       --show                    Show results (Do NOT do it if you are running on a remote server).
       -h, --help                Print the help screen and exit.
       --version                 Prints the version and exits.
@@ -254,11 +290,21 @@ def main():
                         if x.name.startswith(('ICaP', 'FCoNCaP'), 20) and x.name.endswith('.csv')
                         }
 
+    delta_arg = args['--delta']
+    if delta_arg == '-':
+        delta_folder = None
+    elif delta_arg == 'same':
+        delta_folder = in_folder
+    else:
+        raise RuntimeError('wrong parameter')
+
+
     out_folder = args['--out-folder']
     os.makedirs(out_folder, exist_ok=True)
 
     args['in_folder'] = in_folder
     args['out_folder'] = out_folder
+    args['delta_folder'] = delta_folder
     x_all_targets, y_all_targets = collate_different_seeds(target_files, args)
 
 
