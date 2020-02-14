@@ -135,8 +135,18 @@ def collate_different_seeds(target_files: typing.Union[set, list], args: dict) -
                             sigma_delta += delta_file[step]
 
                         # combined_n = tn  # combined n
-                        combined_yv[step, offset] = tx / tn  # Combined mean
-                        combined_yv[step, offset + 1] = (txx - tx ** 2 / tn) / (tn - 1)  # Combined Variance
+                        mean = tx / tn  # Combined mean
+                        variance = (txx - tx ** 2 / tn) / (tn - 1)  # Combined Variance
+
+                        # Using 95% confidence interval instead of variance
+                        s = math.sqrt(variance)  # Standard deviation
+                        z = 1.960  # Z value for 95% CI
+                        ci_error = z * s / math.sqrt(tn)
+
+                        # now setting mean and error
+                        combined_yv[step, offset] = mean
+                        combined_yv[step, offset + 1] = ci_error  # variance  # CI instead of variance
+
                         offset += 2
                         combined_delta[step] = sigma_delta / tn
 
@@ -201,28 +211,28 @@ def create_graph(x: list, ys: np.ndarray, deltas: np.ndarray, out_file: Path, sh
 
             # for fix in enumerate(['100%F', '50%F', '0%F']):
 
-            yf = ys[:, offset + 0]
-            vf = ys[:, offset + 1]
-            if not all(np.isnan(yf)):
-                ax.plot(x, yf, '-', label=f'100%F', color='C0')
-                y1 = yf + vf
-                y2 = yf - vf
+            val = ys[:, offset + 0]
+            err = ys[:, offset + 1]
+            if not all(np.isnan(val)):
+                ax.plot(x, val, '-', label=f'100%F', color='C0')
+                y1 = val + err
+                y2 = val - err
                 ax.fill_between(x, y1, y2, alpha=0.2, color='C0')
 
-            yf = ys[:, offset + 2]
-            vf = ys[:, offset + 3]
-            if not all(np.isnan(yf)):
-                ax.plot(x, yf, '-', label=f'50%F', color='C1')
-                y1 = yf + vf
-                y2 = yf - vf
+            val = ys[:, offset + 2]
+            err = ys[:, offset + 3]
+            if not all(np.isnan(val)):
+                ax.plot(x, val, '-', label=f'50%F', color='C1')
+                y1 = val + err
+                y2 = val - err
                 ax.fill_between(x, y1, y2, alpha=0.2, color='C1')
 
-            yf = ys[:, offset + 4]
-            vf = ys[:, offset + 5]
-            if not all(np.isnan(yf)):
-                ax.plot(x, yf, '-', label=f'0%F', color='C2')
-                y1 = yf + vf
-                y2 = yf - vf
+            val = ys[:, offset + 4]
+            err = ys[:, offset + 5]
+            if not all(np.isnan(val)):
+                ax.plot(x, val, '-', label=f'0%F', color='C2')
+                y1 = val + err
+                y2 = val - err
                 ax.fill_between(x, y1, y2, alpha=0.2, color='C2')
 
             ax_delta = ax.twinx()  # instantiate a second axes that shares the same x-axis
