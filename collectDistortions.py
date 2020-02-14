@@ -1,7 +1,7 @@
 import math
 import os
 import sys
-import typing
+from typing import List, Set, Union, cast
 from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
@@ -40,7 +40,7 @@ def print_aggregated_array(combined: np.ndarray, out_file: Path, args: dict):
             out.write('\n')
 
 
-def collate_different_seeds(target_files: typing.Union[set, list], args: dict) -> tuple:
+def collate_different_seeds(target_files: Union[Set, List], args: dict) -> tuple:
     """
     Aggregate different seeds of the same parameter set.
     The formula to aggregate variances from different subgroups is taken
@@ -103,16 +103,15 @@ def collate_different_seeds(target_files: typing.Union[set, list], args: dict) -
                     new = np.repeat(last_element, add, axis=0)
                     delta_all_seeds[i] = np.concatenate((delta_values, new))
 
-
         # Calculate the grand mean and variance for all of [y_all_seeds]
         combined_yv = np.empty((max_length, len_util * len_num_candidates * len_fixations * group_size), dtype='float')
         combined_delta = np.zeros((max_length, ), dtype=float)
 
         for step in range(max_length):
             offset = 0
-            for utility in utility_names:
+            for _1 in utility_names:
                 for n in num_candidates:
-                    for fixation in fixations:
+                    for _3 in fixations:
                         tn = tx = txx = 0.0
                         sigma_delta = 0.0
                         # aggregate these
@@ -183,23 +182,25 @@ def create_graph(x: list, ys: np.ndarray, deltas: np.ndarray, out_file: Path, sh
 
     offsets_in_subplot = len_fixations * group_size
 
-    ax1: plt.axes.Axes = None
-    ax4: plt.axes.Axes = None
-    ax: plt.axes.Axes = None
+    ax1: plt.axes.SubplotBase = None
+    ax4: plt.axes.SubplotBase = None
     for util_id, util_name in enumerate(utility_names):
+        ax: plt.axes.SubplotBase
         for num_candidates_id, num_candidates_value in enumerate(num_candidates):
             offset = (util_id * len_num_candidates + num_candidates_id) * offsets_in_subplot
             subplot_index = (num_candidates_id * len_util + util_id) + 1
 
             if subplot_index == 1:  # 1st subplot in 1st row
-                ax1 = ax = plt.subplot(len_num_candidates, len_util, subplot_index)
+                ax1 = ax = cast(plt.axes.Axes, plt.subplot(len_num_candidates, len_util, subplot_index))
             elif subplot_index == len_util:  # last subplot in first row
-                ax4 = ax = plt.subplot(len_num_candidates, len_util, subplot_index)
+                ax4 = ax = cast(plt.axes.Axes, plt.subplot(len_num_candidates, len_util, subplot_index))
             else:
                 if util_id == len_util - 1:  # any subsequent subplot in last column
-                    ax = plt.subplot(len_num_candidates, len_util, subplot_index, sharex=ax1, sharey=ax4)
+                    ax = cast(plt.axes.Axes, plt.subplot(len_num_candidates, len_util, subplot_index,
+                                                         sharex=ax1, sharey=ax4))
                 else:
-                    ax = plt.subplot(len_num_candidates, len_util, subplot_index, sharex=ax1, sharey=ax1)
+                    ax = cast(plt.axes.Axes, plt.subplot(len_num_candidates, len_util, subplot_index,
+                                                         sharex=ax1, sharey=ax1))
             # ax.set_yscale('log', basey=2)
             ax.set_xscale('log', basex=10, subsx=[2, 3, 4, 5, 6, 7, 8, 9])
 
@@ -286,7 +287,7 @@ def main():
 
     if args['--list']:
         lines = open(args['--list']).readlines()
-        target_files = [l.rstrip() for l in lines]
+        target_files = [line.rstrip() for line in lines]
         # print(target_files)
     else:
         target_files = {x.name[14: x.name.rfind(',seed')] for x in in_folder.iterdir()
@@ -298,7 +299,8 @@ def main():
 
     args['in_folder'] = in_folder
     args['out_folder'] = out_folder
-    x_all_targets, y_all_targets = collate_different_seeds(target_files, args)
+    # x_all_targets, y_all_targets = collate_different_seeds(target_files, args)
+    collate_different_seeds(target_files, args)
 
 
 # =====================================================================================
