@@ -54,7 +54,6 @@ def collate_different_seeds(target_files: typing.Union[set, list], args: dict) -
     """
     in_folder: Path = args['in_folder']
     out_folder: Path = args['out_folder']
-    delta_folder: Path = args['delta_folder']
     x_all_targets = dict()
     y_all_targets = dict()
     delta_all_targets = dict()
@@ -63,7 +62,7 @@ def collate_different_seeds(target_files: typing.Union[set, list], args: dict) -
         max_length = 0
         x_all_seeds = []
         y_all_seeds = []
-        delta_all_seeds = [] if delta_folder else None
+        delta_all_seeds = []
         files_from_all_seeds = [f for f in in_folder.iterdir() if f.name.startswith(target, 14)]
         for f in files_from_all_seeds:
             # input_file = Path(in_folder, f)
@@ -76,12 +75,7 @@ def collate_different_seeds(target_files: typing.Union[set, list], args: dict) -
             # TODO add delta code here
             temp_arr = np.loadtxt(f, skiprows=1)
 
-            if delta_folder is None:
-                x_values, y_values = temp_arr[:, 0], temp_arr[:, 1:]
-                delta_values = None
-            else:
-                x_values, delta_values, y_values = temp_arr[:, 0], temp_arr[:, 1], temp_arr[:, 2:]
-
+            x_values, delta_values, y_values = temp_arr[:, 0], temp_arr[:, 1], temp_arr[:, 2:]
             x_values = x_values.astype(int)
             # print(x_values)
             if len(x_values) > max_length:
@@ -267,7 +261,6 @@ def main():
       -i, --in-folder=IFOLDER   input folder where all means/variances are.     [Default: ./]
       -o, --out-folder=OFOLDER  Output folder where all scenarios are written   [Default: ./out]
       -l, --log=LFILE           Log file (if omitted or -, output to stdout)    [Default: -]
-      -d, --delta=DELTA         System delta data (- | same)                    [Default: same]
       --show                    Show results (Do NOT do it if you are running on a remote server).
       -h, --help                Print the help screen and exit.
       --version                 Prints the version and exits.
@@ -300,21 +293,11 @@ def main():
                         if x.name.startswith(('ICaP', 'FCoNCaP'), 20) and x.name.endswith('.csv')
                         }
 
-    delta_arg = args['--delta']
-    if delta_arg == '-':
-        delta_folder = None
-    elif delta_arg == 'same':
-        delta_folder = in_folder
-    else:
-        raise RuntimeError('wrong parameter')
-
-
     out_folder = args['--out-folder']
     os.makedirs(out_folder, exist_ok=True)
 
     args['in_folder'] = in_folder
     args['out_folder'] = out_folder
-    args['delta_folder'] = delta_folder
     x_all_targets, y_all_targets = collate_different_seeds(target_files, args)
 
 
