@@ -1,12 +1,16 @@
 import math
 import os
+from pathlib import Path
 import sys
 from typing import List, Set, Union, cast
-from pathlib import Path
-import matplotlib.pyplot as plt
+
+from matplotlib.axes import SubplotBase
 from matplotlib.figure import Figure
-import numpy as np
+
 from docopt import docopt
+import matplotlib.pyplot as plt
+import numpy as np
+
 
 utility_names = ['XB', 'LB', 'P', 'V']
 num_candidates = [3, 6]
@@ -19,7 +23,7 @@ len_num_candidates = len(num_candidates)
 group_size = len(group)
 
 
-def print_aggregated_array(combined: np.ndarray, out_file: Path, args: dict):
+def print_aggregated_array(xs, y_combined: np.ndarray, out_file: Path, args: dict):
     with open(out_file, mode='w') as out:
         out.write('Step\t')
         for utility in utility_names:
@@ -28,14 +32,14 @@ def print_aggregated_array(combined: np.ndarray, out_file: Path, args: dict):
                     for value in group:
                         out.write(f'U{utility}_C{c}_{fixation}_{value}\t')
         out.write('\n')
-        for step in range(combined.shape[0]):
-            out.write(f'{step * 10}\t')
+        for step, original_step_id in enumerate(xs):
+            out.write(f'{original_step_id}\t')
             offset = 0
             for utility in utility_names:
                 for c in num_candidates:
                     for fixation in fixations:
                         for value in group:
-                            out.write(f'{combined[step, offset]:.6E}\t')
+                            out.write(f'{y_combined[step, offset]:.6E}\t')
                             offset += 1
             out.write('\n')
 
@@ -54,12 +58,14 @@ def collate_different_seeds(target_files: Union[Set, List], args: dict) -> tuple
     """
     in_folder: Path = args['in_folder']
     out_folder: Path = args['out_folder']
-    x_all_targets = dict()
+    # x_all_targets = dict()
     y_all_targets = dict()
     delta_all_targets = dict()
     for target in iter(target_files):
-        print(target)
+        print(target, flush=True)
         max_length = 0
+        x_longest = None
+
         x_all_seeds = []
         y_all_seeds = []
         delta_all_seeds = []
@@ -72,18 +78,16 @@ def collate_different_seeds(target_files: Union[Set, List], args: dict) -> tuple
                 # print(f'============={f} EMPTY=================')
                 continue
 
-            # TODO add delta code here
-            temp_arr = np.loadtxt(f, skiprows=1)
-
+            temp_arr = np.loadtxt(f, skiprows=3)
             x_values, delta_values, y_values = temp_arr[:, 0], temp_arr[:, 1], temp_arr[:, 2:]
             x_values = x_values.astype(int)
             # print(x_values)
             if len(x_values) > max_length:
                 max_length = len(x_values)
+                x_longest = x_values
             x_all_seeds.append(x_values)
             y_all_seeds.append(y_values)
-            if delta_all_seeds is not None:
-                delta_all_seeds.append(delta_values)
+            delta_all_seeds.append(delta_values)
 
         # Normalize by repeating last element
         for i in range(len(x_all_seeds)):
@@ -97,11 +101,11 @@ def collate_different_seeds(target_files: Union[Set, List], args: dict) -> tuple
                 last_element = y_values[ln - 1]
                 new = np.repeat([last_element], add, axis=0)
                 y_all_seeds[i] = np.vstack((y_values, new))
-                if delta_all_seeds is not None:
-                    delta_values = delta_all_seeds[i]
-                    last_element = delta_values[ln - 1]
-                    new = np.repeat(last_element, add, axis=0)
-                    delta_all_seeds[i] = np.concatenate((delta_values, new))
+
+                delta_values = delta_all_seeds[i]
+                last_element = delta_values[ln - 1]
+                new = np.repeat(last_element, add, axis=0)
+                delta_all_seeds[i] = np.concatenate((delta_values, new))
 
         # Calculate the grand mean and variance for all of [y_all_seeds]
         combined_yv = np.empty((max_length, len_util * len_num_candidates * len_fixations * group_size), dtype='float')
@@ -143,18 +147,18 @@ def collate_different_seeds(target_files: Union[Set, List], args: dict) -> tuple
                         offset += 2
                         combined_delta[step] = sigma_delta / tn
 
-        x_all_targets[target] = list(range(0, max_length * 10, 10))
+        # Use x_longest instead of x_all_targets[target]
+        # x_all_targets[target] = list(range(0, max_length * 10, 10))
         y_all_targets[target] = combined_yv
         delta_all_targets[target] = combined_delta
 
         # print the combined mean and variance to a file for persistence
-        print_aggregated_array(combined_yv, Path(out_folder, f'distortion-{target}-allseeds.csv'), args)
+        print_aggregated_array(x_longest, y_all_targets[target], Path(out_folder, f'distortion-{target}-allseeds.csv'), args)
 
         # draw nine graphs to a single graphs
         show = args['--show']
         try:
-            create_graph(x_all_targets[target], y_all_targets[target], delta_all_targets[target],
-                         Path(out_folder, f'distortion-{target}.png'), show)
+            create_graph(x_longest, y_all_targets[target], delta_all_targets[target], out_folder, target, show)
         except BaseException as baseException:
             log = args['log']
             log.write(f'Error in {target}\n')
@@ -167,42 +171,53 @@ def collate_different_seeds(target_files: Union[Set, List], args: dict) -> tuple
             log.write(str(inf[2]))
             log.write('\n------------------------------------------------------\n')
 
-    return x_all_targets, y_all_targets
+    return x_longest, y_all_targets, delta_all_targets
+
+def create_graph(x: np.ndarray, ys: np.ndarray, deltas: np.ndarray, out_folder: Path, target: str, show: bool = False):
+    out_file: Path = Path(out_folder, f'distortion-{target}-init.png')
+    figure = create_special_graph(x[:51], ys[:51], deltas[:51], False)
+    plt.savefig(out_file)
+    if show:
+        plt.show()
+    plt.close(figure)
+
+    out_file: Path = Path(out_folder, f'distortion-{target}-long.png')
+    figure = create_special_graph(x[10:], ys[10:], deltas[10:], True)
+    plt.savefig(out_file)
+    if show:
+        plt.show()
+    plt.close(figure)
 
 
-# def create_graphs(x_all_targets: dict, y_all_targets: dict, show: bool = False):
-#     targets = x_all_targets.keys()
-#     for target in iter(targets):
-#         create_graph(x_all_targets[target], y_all_targets[target], target, show)
-
-
-def create_graph(x: list, ys: np.ndarray, deltas: np.ndarray, out_file: Path, show: bool = False):
-    figure: Figure = plt.figure(figsize=(20, 10), dpi=200)
+def create_special_graph(x, ys, deltas, x_log_scale=False):
+    figure: Figure = plt.figure(figsize=(20, 10), dpi=200, clear=True)
     # plt.subplot(3, 3, 1)
 
     offsets_in_subplot = len_fixations * group_size
 
-    ax1: plt.axes.SubplotBase = None
-    ax4: plt.axes.SubplotBase = None
+    ax1: SubplotBase = None
+    ax4: SubplotBase = None
     for util_id, util_name in enumerate(utility_names):
-        ax: plt.axes.SubplotBase
         for num_candidates_id, num_candidates_value in enumerate(num_candidates):
+            ax: SubplotBase = None
             offset = (util_id * len_num_candidates + num_candidates_id) * offsets_in_subplot
             subplot_index = (num_candidates_id * len_util + util_id) + 1
 
             if subplot_index == 1:  # 1st subplot in 1st row
-                ax1 = ax = cast(plt.axes.Axes, plt.subplot(len_num_candidates, len_util, subplot_index))
+                ax1 = ax = cast(SubplotBase, plt.subplot(len_num_candidates, len_util, subplot_index))
             elif subplot_index == len_util:  # last subplot in first row
-                ax4 = ax = cast(plt.axes.Axes, plt.subplot(len_num_candidates, len_util, subplot_index))
+                ax4 = ax = cast(SubplotBase, plt.subplot(len_num_candidates, len_util, subplot_index,
+                                                             sharex=ax1))
             else:
                 if util_id == len_util - 1:  # any subsequent subplot in last column
-                    ax = cast(plt.axes.Axes, plt.subplot(len_num_candidates, len_util, subplot_index,
-                                                         sharex=ax1, sharey=ax4))
+                    ax = cast(SubplotBase, plt.subplot(len_num_candidates, len_util, subplot_index,
+                                                           sharex=ax1, sharey=ax4))
                 else:
-                    ax = cast(plt.axes.Axes, plt.subplot(len_num_candidates, len_util, subplot_index,
-                                                         sharex=ax1, sharey=ax1))
+                    ax = cast(SubplotBase, plt.subplot(len_num_candidates, len_util, subplot_index,
+                                                           sharex=ax1, sharey=ax1))
             # ax.set_yscale('log', basey=2)
-            ax.set_xscale('log', basex=10, subsx=[2, 3, 4, 5, 6, 7, 8, 9])
+            if x_log_scale:
+                ax.set_xscale('log', basex=10, subsx=[2, 3, 4, 5, 6, 7, 8, 9])
 
             # for fix in enumerate(['100%F', '50%F', '0%F']):
 
@@ -231,11 +246,12 @@ def create_graph(x: list, ys: np.ndarray, deltas: np.ndarray, out_file: Path, sh
                 ax.fill_between(x, y1, y2, alpha=0.2, color='C2')
 
             ax_delta = ax.twinx()  # instantiate a second axes that shares the same x-axis
-            color = 'tab:blue'
-            ax_delta.set_ylabel('sys delta', color=color)  # we already handled the x-label with ax1
+            color = 'k'
+            if util_id == len_util - 1:  # any subplot in last column
+                ax_delta.set_ylabel('sys delta', color=color)  # we will handle the x-label with separately
             ax_delta.plot(x, deltas, color=color)
             ax_delta.tick_params(axis='y', labelcolor=color)
-            ax_delta.set_yscale('log', basey=2)
+            ax_delta.set_yscale('log', basey=10)
 
             ax.legend()
             ax.grid(True)
@@ -245,10 +261,7 @@ def create_graph(x: list, ys: np.ndarray, deltas: np.ndarray, out_file: Path, sh
                 ax.set_xlabel(f'Util={util_name}')
 
     figure.tight_layout()  # otherwise the right y-label is slightly clipped
-    plt.savefig(out_file)
-    if show:
-        plt.show()
-    plt.close(figure)
+    return figure
 
 
 def main():
@@ -283,7 +296,7 @@ def main():
     in_folder_arg = args['--in-folder']
     in_folder = Path(in_folder_arg)
     if not in_folder.is_dir():
-        raise RuntimeError('in-folder is does not exist or is not a folder: %s' % in_folder)
+        raise RuntimeError('in-folder does not exist or is not a folder: %s' % in_folder)
 
     if args['--list']:
         lines = open(args['--list']).readlines()
@@ -301,6 +314,7 @@ def main():
     args['out_folder'] = out_folder
     # x_all_targets, y_all_targets = collate_different_seeds(target_files, args)
     collate_different_seeds(target_files, args)
+    print("Done")
 
 
 # =====================================================================================
