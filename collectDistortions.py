@@ -152,24 +152,25 @@ def collate_different_seeds(target_files: Union[Set, List], args: dict) -> tuple
         y_all_targets[target] = combined_yv
         delta_all_targets[target] = combined_delta
 
-        # print the combined mean and variance to a file for persistence
-        print_aggregated_array(x_longest, y_all_targets[target], Path(out_folder, f'distortion-{target}-allseeds.csv'), args)
+        if x_longest is not None and len(x_longest):
+            # print the combined mean and variance to a file for persistence
+            print_aggregated_array(x_longest, y_all_targets[target], Path(out_folder, f'distortion-{target}-allseeds.csv'), args)
 
-        # draw nine graphs to a single graphs
-        show = args['--show']
-        try:
-            create_graph(x_longest, y_all_targets[target], delta_all_targets[target], out_folder, target, show)
-        except BaseException as baseException:
-            log = args['log']
-            log.write(f'Error in {target}\n')
-            log.write(str(baseException))
-            inf = sys.exc_info()
-            log.write(str(inf[0]))
-            log.write(',\t')
-            log.write(str(inf[1]))
-            log.write('\n')
-            log.write(str(inf[2]))
-            log.write('\n------------------------------------------------------\n')
+            # draw nine graphs to a single graphs
+            show = args['--show']
+            try:
+                create_graph(x_longest, y_all_targets[target], delta_all_targets[target], out_folder, target, show)
+            except BaseException as baseException:
+                log = args['log']
+                log.write(f'Error in {target}\n')
+                log.write(str(baseException))
+                inf = sys.exc_info()
+                log.write(str(inf[0]))
+                log.write(',\t')
+                log.write(str(inf[1]))
+                log.write('\n')
+                log.write(str(inf[2]))
+                log.write('\n------------------------------------------------------\n')
 
     return x_longest, y_all_targets, delta_all_targets
 
@@ -217,7 +218,7 @@ def create_special_graph(x, ys, deltas, x_log_scale=False):
                                                            sharex=ax1, sharey=ax1))
             # ax.set_yscale('log', basey=2)
             if x_log_scale:
-                ax.set_xscale('log', basex=10, subsx=[2, 3, 4, 5, 6, 7, 8, 9])
+                ax.set_xscale('log', base=10, subs=[2, 3, 4, 5, 6, 7, 8, 9])
 
             # for fix in enumerate(['100%F', '50%F', '0%F']):
 
@@ -251,7 +252,7 @@ def create_special_graph(x, ys, deltas, x_log_scale=False):
                 ax_delta.set_ylabel('sys delta', color=color)  # we will handle the x-label with separately
             ax_delta.plot(x, deltas, color=color)
             ax_delta.tick_params(axis='y', labelcolor=color)
-            ax_delta.set_yscale('log', basey=10)
+            ax_delta.set_yscale('log', base=10)
 
             ax.legend()
             ax.grid(True)
