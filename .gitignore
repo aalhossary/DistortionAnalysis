@@ -1,1 +1,4 @@
 /out/
+/.project
+/.pydevproject
+__pycache__
